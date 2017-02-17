@@ -119,7 +119,10 @@ module Semian
   # +name+: Name of the resource - this can be either a string or symbol.
   #
   # +tickets+: Number of tickets. If this value is 0, the ticket count will not be set,
-  # but the resource must have been previously registered otherwise an error will be raised.
+  # but the resource must have been previously registered otherwise an error will be raised. // FIXME
+  #
+  # +quota+: Number of tickets. If this value is 0, the ticket count will not be set,
+  # but the resource must have been previously registered otherwise an error will be raised. // FIXME
   #
   # +permissions+: Octal permissions of the resource.
   #
@@ -134,7 +137,7 @@ module Semian
   # +exceptions+: An array of exception classes that should be accounted as resource errors.
   #
   # Returns the registered resource.
-  def register(name, tickets:, permissions: 0660, timeout: 0, error_threshold:, error_timeout:, success_threshold:, exceptions: [])
+  def register(name, tickets: nil, quota: nil, permissions: 0660, timeout: 0, error_threshold:, error_timeout:, success_threshold:, exceptions: [])
     circuit_breaker = CircuitBreaker.new(
       name,
       success_threshold: success_threshold,
@@ -143,7 +146,7 @@ module Semian
       exceptions: Array(exceptions) + [::Semian::BaseError],
       implementation: ::Semian::Simple,
     )
-    resource = Resource.new(name, tickets: tickets, permissions: permissions, timeout: timeout)
+    resource = Resource.new(name, tickets: tickets, quota: quota, permissions: permissions, timeout: timeout)
     resources[name] = ProtectedResource.new(resource, circuit_breaker)
   end
 

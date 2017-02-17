@@ -39,11 +39,15 @@ typedef VALUE (*my_blocking_fn_t)(void*);
 //   SI_SEM_TICKETS             semaphore for the tickets currently issued
 //   SI_SEM_CONFIGURED_TICKETS  semaphore to track the desired number of tickets available for issue
 //   SI_SEM_LOCK                metadata lock to act as a mutex, ensuring thread-safety for updating other semaphores
+//   SI_SEM_REGISTERED_WORKERS  semaphore for the number of workers currently registered
+//   SI_SEM_CONFIGURED_WORKERS  semaphore for the number of workers that our quota is using for configured tickets
 //   SI_NUM_SEMAPHORES          always leave this as last entry for count to be accurate
 #define FOREACH_SEMINDEX(SEMINDEX) \
         SEMINDEX(SI_SEM_TICKETS)   \
         SEMINDEX(SI_SEM_CONFIGURED_TICKETS)  \
         SEMINDEX(SI_SEM_LOCK)   \
+        SEMINDEX(SI_SEM_REGISTERED_WORKERS)  \
+        SEMINDEX(SI_SEM_CONFIGURED_WORKERS)  \
         SEMINDEX(SI_NUM_SEMAPHORES)  \
 
 #define GENERATE_ENUM(ENUM) ENUM,

@@ -3,6 +3,12 @@
 static VALUE
 cleanup_semian_resource_acquire(VALUE self);
 
+static void
+check_tickets_xor_quota_arg(VALUE tickets, VALUE quota);
+
+static double
+check_quota_arg(VALUE quota);
+
 static int
 check_tickets_arg(VALUE tickets);
 
@@ -33,6 +39,13 @@ semian_resource_acquire(int argc, VALUE *argv, VALUE self)
 
   TypedData_Get_Struct(self, semian_resource_t, &semian_resource_type, self_res);
   res = *self_res;
+
+  if (res.quota > 0) {
+    // Ensure that configured tickets match the quota before acquiring
+    sem_meta_lock(res.sem_id);
+    update_tickets_from_quota(res.sem_id, res.quota);
+    sem_meta_unlock(res.sem_id);
+  }
 
   /* allow the default timeout to be overridden by a "timeout" param */
   if (argc == 1 && TYPE(argv[0]) == T_HASH) {
@@ -97,17 +110,20 @@ semian_resource_id(VALUE self)
 }
 
 VALUE
-semian_resource_initialize(VALUE self, VALUE id, VALUE tickets, VALUE permissions, VALUE default_timeout)
+semian_resource_initialize(VALUE self, VALUE id, VALUE tickets, VALUE quota, VALUE permissions, VALUE default_timeout)
 {
   key_t key;
   int c_permissions;
   double c_timeout;
+  double c_quota;
   int c_tickets;
   int created = 0;
   semian_resource_t *res = NULL;
   const char *c_id_str = NULL;
 
   // Check and cast arguments
+  check_tickets_xor_quota_arg(tickets, quota);
+  c_quota = check_quota_arg(quota);
   c_tickets = check_tickets_arg(tickets);
   c_permissions = check_permissions_arg(permissions);
   c_id_str = check_id_arg(id);
@@ -119,6 +135,7 @@ semian_resource_initialize(VALUE self, VALUE id, VALUE tickets, VALUE permission
   // Populate struct fields
   ms_to_timespec(c_timeout * 1000, &res->timeout);
   res->name = strdup(c_id_str);
+  res->quota = c_quota;
 
   // Get or create semaphore set
   //  note that tickets = 0 will be used to acquire a semaphore set after it's been created elswhere
@@ -131,7 +148,7 @@ semian_resource_initialize(VALUE self, VALUE id, VALUE tickets, VALUE permission
   set_semaphore_permissions(res->sem_id, c_permissions);
 
   // Configure semaphore ticket counts
-  configure_tickets(res->sem_id, c_tickets, created);
+  configure_tickets(res->sem_id, c_tickets, c_quota, created);
 
   return self;
 }
@@ -160,6 +177,33 @@ check_permissions_arg(VALUE permissions)
 {
   Check_Type(permissions, T_FIXNUM);
   return FIX2LONG(permissions);
+}
+
+static void
+check_tickets_xor_quota_arg(VALUE tickets, VALUE quota)
+{
+  if ((TYPE(tickets) == T_NIL && TYPE(quota) == T_NIL) ||(TYPE(tickets) != T_NIL && TYPE(quota) != T_NIL)){
+    rb_raise(rb_eArgError, "Must pass exactly one of ticket or quota");
+  }
+}
+
+static double
+check_quota_arg(VALUE quota)
+{
+  double c_quota;
+
+  if (TYPE(quota) != T_NIL) {
+    if (TYPE(quota) != T_FIXNUM && TYPE(quota) != T_FLOAT) {
+      rb_raise(rb_eTypeError, "expected decimal type for quota");
+    }
+    if (NUM2DBL(quota) < 0 || NUM2DBL(quota) > 1) {
+      rb_raise(rb_eArgError, "quota must be a decimal between 0 and 1");
+    }
+    c_quota = NUM2DBL(quota);
+  } else {
+    c_quota = -1.0f;
+  }
+  return c_quota;
 }
 
 static int

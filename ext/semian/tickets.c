@@ -1,10 +1,13 @@
 #include "tickets.h"
 
 static void
-initialize_tickets(int sem_id, int tickets);
+initialize_tickets(int sem_id, int tickets, double quota);
 
 static void
 configure_static_tickets(int sem_id, int tickets);
+
+static void
+configure_quota_tickets(int sem_id, double quota);
 
 VALUE
 update_ticket_count(update_ticket_count_t *tc)
@@ -27,28 +30,96 @@ update_ticket_count(update_ticket_count_t *tc)
 
   return Qnil;
 }
+
+int
+update_tickets_from_quota(int sem_id, double quota)
+{
+  int delta = 0;
+  int tickets = 0;
+  int state;
+  update_ticket_count_t tc;
+  struct timespec ts = { 0 };
+
+  ts.tv_sec = INTERNAL_TIMEOUT;
+
+  //printf("Updating based on quota %f\n", quota);
+  // If the configured worker count doesn't match the registered worker count, adjust it.
+  // and adjust the underlying tickets available to match.
+  delta = get_sem_val(sem_id, SI_SEM_REGISTERED_WORKERS) - get_sem_val(sem_id, SI_SEM_CONFIGURED_WORKERS);
+  if (delta != 0) {
+    if (perform_semop(sem_id, SI_SEM_CONFIGURED_WORKERS, delta, 0, &ts) == -1) {
+      rb_raise(eInternal, "error setting configured workers, errno: %d (%s)", errno, strerror(errno));
+    }
+
+    // Compute the ticket count
+    tickets = (int) ceil(get_sem_val(sem_id, SI_SEM_CONFIGURED_WORKERS) * quota);
+    //printf("Configured ticket count %d with quota %f and workers %d\n", tickets, quota, get_sem_val(sem_id, SI_SEM_CONFIGURED_WORKERS));
+    tc.sem_id = sem_id;
+    tc.tickets = tickets;
+    rb_protect((VALUE (*)(VALUE)) update_ticket_count, (VALUE) &tc, &state);
+  }
+
+  return state;
+}
+
 void
-configure_tickets(int sem_id, int tickets, int should_initialize)
+configure_tickets(int sem_id, int tickets, double quota, int should_initialize)
 {
   if (should_initialize) {
-    initialize_tickets(sem_id, tickets);
+    initialize_tickets(sem_id, tickets, quota);
   }
 
   if (tickets > 0) {
     configure_static_tickets(sem_id, tickets);
+  } else if (quota > 0) {
+    configure_quota_tickets(sem_id, quota);
   }
 }
 
 static void
-initialize_tickets(int sem_id, int tickets)
+initialize_tickets(int sem_id, int tickets, double quota)
 {
   unsigned short init_vals[SI_NUM_SEMAPHORES];
 
-  init_vals[SI_SEM_TICKETS] = init_vals[SI_SEM_CONFIGURED_TICKETS] = tickets;
+  if (tickets > 0) {
+    // Initialize for a static ticket strategy
+    init_vals[SI_SEM_TICKETS] = init_vals[SI_SEM_CONFIGURED_TICKETS] = tickets;
+    init_vals[SI_SEM_REGISTERED_WORKERS] = init_vals[SI_SEM_CONFIGURED_WORKERS] = 0;
+  }
+  else if (quota > 0) {
+    // quota was specified, not tickets
+    init_vals[SI_SEM_TICKETS] = init_vals[SI_SEM_CONFIGURED_TICKETS] = 0;
+    init_vals[SI_SEM_REGISTERED_WORKERS] = init_vals[SI_SEM_CONFIGURED_WORKERS] = 0;
+  } else {
+    rb_raise(eInternal, "no valid ticket count or quota was configured");
+  }
+
   init_vals[SI_SEM_LOCK] = 1;
 
   if (semctl(sem_id, 0, SETALL, init_vals) == -1) {
     raise_semian_syscall_error("semctl()", errno);
+  }
+}
+
+
+static void
+configure_quota_tickets(int sem_id, double quota)
+{
+  int state;
+   // TO DO - is a spinwait needed here?
+  sem_meta_lock(sem_id);
+
+  // Ensure that a worker for this process is registered
+  if (perform_semop(sem_id, SI_SEM_REGISTERED_WORKERS, 1, 0, NULL) == -1) {
+    rb_raise(eInternal, "error incrementing registered workers, errno: %d (%s)", errno, strerror(errno));
+  }
+
+  // Ensure that our max tickets matches the quota
+  state = update_tickets_from_quota(sem_id, quota);
+  sem_meta_unlock(sem_id);
+
+  if (state) {
+    rb_jump_tag(state);
   }
 }
 
