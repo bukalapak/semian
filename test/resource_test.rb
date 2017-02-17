@@ -187,6 +187,9 @@ class TestResource < Minitest::Test
     Process.waitall
 
     assert_equal quota * workers, resource.count
+
+    resource.acquire {}
+    assert_equal 1, resource.tickets
   end
 
   def test_acquire_releases_on_kill

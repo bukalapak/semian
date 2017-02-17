@@ -118,7 +118,7 @@ configure_quota_tickets(int sem_id, double quota)
   sem_meta_lock(sem_id);
 
   // Ensure that a worker for this process is registered
-  if (perform_semop(sem_id, SI_SEM_REGISTERED_WORKERS, 1, 0, NULL) == -1) {
+  if (perform_semop(sem_id, SI_SEM_REGISTERED_WORKERS, 1, SEM_UNDO, NULL) == -1) {
     rb_raise(eInternal, "error incrementing registered workers, errno: %d (%s)", errno, strerror(errno));
   }
 
