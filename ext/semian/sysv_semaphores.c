@@ -126,6 +126,7 @@ acquire_semaphore_without_gvl(void *p)
 {
   semian_resource_t *res = (semian_resource_t *) p;
   res->error = 0;
+  //printf("Tickets %d\n", get_sem_val(res->sem_id, SI_SEM_TICKETS));
   if (perform_semop(res->sem_id, SI_SEM_TICKETS, -1, SEM_UNDO, &res->timeout) == -1) {
     res->error = errno;
   }

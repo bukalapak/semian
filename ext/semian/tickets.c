@@ -42,7 +42,13 @@ update_tickets_from_quota(int sem_id, double quota)
 
   ts.tv_sec = INTERNAL_TIMEOUT;
 
-  //printf("Updating based on quota %f\n", quota);
+  // DEBUG PRINT - delete me
+  //printf("%d %d %d %d\n",
+  //  get_sem_val(sem_id, SI_SEM_TICKETS),
+  //  get_sem_val(sem_id, SI_SEM_CONFIGURED_TICKETS),
+  //  get_sem_val(sem_id, SI_SEM_REGISTERED_WORKERS),
+  //  get_sem_val(sem_id, SI_SEM_CONFIGURED_WORKERS)
+  //);
   // If the configured worker count doesn't match the registered worker count, adjust it.
   // and adjust the underlying tickets available to match.
   delta = get_sem_val(sem_id, SI_SEM_REGISTERED_WORKERS) - get_sem_val(sem_id, SI_SEM_CONFIGURED_WORKERS);
@@ -53,6 +59,7 @@ update_tickets_from_quota(int sem_id, double quota)
 
     // Compute the ticket count
     tickets = (int) ceil(get_sem_val(sem_id, SI_SEM_CONFIGURED_WORKERS) * quota);
+    // DEBUG PRINT - delete me
     //printf("Configured ticket count %d with quota %f and workers %d\n", tickets, quota, get_sem_val(sem_id, SI_SEM_CONFIGURED_WORKERS));
     tc.sem_id = sem_id;
     tc.tickets = tickets;
@@ -65,6 +72,7 @@ update_tickets_from_quota(int sem_id, double quota)
 void
 configure_tickets(int sem_id, int tickets, double quota, int should_initialize)
 {
+
   if (should_initialize) {
     initialize_tickets(sem_id, tickets, quota);
   }
@@ -86,7 +94,7 @@ initialize_tickets(int sem_id, int tickets, double quota)
     init_vals[SI_SEM_TICKETS] = init_vals[SI_SEM_CONFIGURED_TICKETS] = tickets;
     init_vals[SI_SEM_REGISTERED_WORKERS] = init_vals[SI_SEM_CONFIGURED_WORKERS] = 0;
   }
-  else if (quota > 0) {
+  else if (quota > 0) { // FIXME edgecases?
     // quota was specified, not tickets
     init_vals[SI_SEM_TICKETS] = init_vals[SI_SEM_CONFIGURED_TICKETS] = 0;
     init_vals[SI_SEM_REGISTERED_WORKERS] = init_vals[SI_SEM_CONFIGURED_WORKERS] = 0;

@@ -9,7 +9,6 @@ module Semian
         Semian.issue_disabled_semaphores_warning
       end
       @name = name
-      @tickets = tickets # FIXME
     end
 
     def destroy
@@ -20,6 +19,10 @@ module Semian
     end
 
     def count
+      0
+    end
+
+    def tickets
       0
     end
 

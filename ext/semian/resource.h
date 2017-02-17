@@ -61,6 +61,15 @@ semian_resource_count(VALUE self);
 
 /*
  * call-seq:
+ *    resource.tickets -> count
+ *
+ * Returns the configured number of tickets for a resource.
+ */
+VALUE
+semian_resource_tickets(VALUE self);
+
+/*
+ * call-seq:
  *    resource.semid -> id
  *
  * Returns the SysV semaphore id of a resource.

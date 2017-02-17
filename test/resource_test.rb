@@ -44,6 +44,16 @@ class TestResource < Minitest::Test
     create_resource :testing, quota: 0.5
   end
 
+  def test_register_invalid_quota
+    assert_raises ArgumentError do
+      create_resource :testing, quota: 2.0
+    end
+
+    assert_raises ArgumentError do
+      create_resource :testing, quota: -1.0
+    end
+  end
+
   def test_register_with_quota_and_tickets_raises
     assert_raises ArgumentError do
       create_resource :testing, tickets:2, quota: 0.5
@@ -143,6 +153,40 @@ class TestResource < Minitest::Test
 
       Process.wait
     end
+  end
+
+  def test_acquire_with_fork_and_quota
+    pids = []
+    quota = 0.5
+    workers = 10
+
+    resource = create_resource :testing, quota: quota, timeout: 0.1
+
+    for i in (1..(workers-1))
+      pids << fork do
+        resource = create_resource :testing, quota: quota, timeout: 0.1
+        assert_equal (quota * (i+1)).ceil, resource.tickets
+        begin
+          resource.acquire do
+            sleep 10
+          end
+        rescue Semian::TimeoutError
+        end
+      end
+    end
+
+    sleep 0.1 until resource.count == 0
+
+    assert_equal quota * workers, resource.tickets
+    assert_equal 0, resource.count
+
+    assert_raises Semian::TimeoutError do
+      resource.acquire {}
+    end
+
+    Process.waitall
+
+    assert_equal quota * workers, resource.count
   end
 
   def test_acquire_releases_on_kill
