@@ -44,6 +44,18 @@ class TestResource < Minitest::Test
     create_resource :testing, quota: 0.5
   end
 
+  def test_register_with_quota_and_tickets_raises
+    assert_raises ArgumentError do
+      create_resource :testing, tickets:2, quota: 0.5
+    end
+  end
+
+  def test_register_with_neither_quota_nor_tickets_raises
+    assert_raises ArgumentError do
+      create_resource :testing
+    end
+  end
+
   def test_register_with_no_tickets_raises
     assert_raises Semian::SyscallError do
       create_resource :testing, tickets: 0
